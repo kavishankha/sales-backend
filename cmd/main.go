@@ -13,7 +13,15 @@ import (
 func main() {
 
 	config.LoadConfig()
-	database.InitDB()
+	// Initialize DB connection
+	db := database.InitDB()
+	if db == nil {
+		log.Fatal("Failed to initialize database")
+	}
+	defer db.Close()
+
+	// Run migrations
+	database.RunMigrations(db)
 	e := echo.New()
 
 	// 🔐 Global panic recovery
