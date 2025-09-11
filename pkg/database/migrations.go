@@ -19,7 +19,6 @@ func RunMigrations(DB *sql.DB) {
 			product_id INT PRIMARY KEY,
 			product_name VARCHAR(255),
 			category VARCHAR(100),
-			price DECIMAL(10,2),
 			stock_quantity INT,
 			added_date TIMESTAMP
 		);`,
@@ -29,18 +28,12 @@ func RunMigrations(DB *sql.DB) {
 			transaction_id INT PRIMARY KEY,
 			transaction_date TIMESTAMP,
 			user_id INT,
-			CONSTRAINT fk_transaction_user FOREIGN KEY (user_id) REFERENCES users(user_id)
-		);`,
-
-		// Transaction details table
-		`CREATE TABLE IF NOT EXISTS transaction_details (
-			transaction_id INT,
 			product_id INT,
+			price DECIMAL(10,2),   -- region-adjusted price at purchase
 			quantity INT,
 			total_price DECIMAL(10,2),
-			PRIMARY KEY (transaction_id, product_id),
-			CONSTRAINT fk_detail_transaction FOREIGN KEY (transaction_id) REFERENCES transactions(transaction_id),
-			CONSTRAINT fk_detail_product FOREIGN KEY (product_id) REFERENCES products(product_id)
+			CONSTRAINT fk_transaction_user FOREIGN KEY (user_id) REFERENCES users(user_id),
+			CONSTRAINT fk_transaction_product FOREIGN KEY (product_id) REFERENCES products(product_id)
 		);`,
 	}
 

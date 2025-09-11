@@ -8,21 +8,22 @@ import (
 )
 
 func RegionsByRevenue(ctx context.Context) ([]models.Region, error) {
-	query := `SELECT jsonb_build_object(
+	query := `
+SELECT jsonb_build_object(
     'data', jsonb_agg(region_data)
 ) AS result
 FROM (
     SELECT 
         u.region,
-        SUM(td.total_price) AS revenueUSD,
-        SUM(td.quantity) AS itemsSold
-    FROM transaction_details td
-    JOIN transactions t ON td.transaction_id = t.transaction_id
+        SUM(t.total_price) AS revenueUSD,
+        SUM(t.quantity) AS itemsSold
+    FROM transactions t
     JOIN users u ON t.user_id = u.user_id
     GROUP BY u.region
-    ORDER BY SUM(td.total_price) DESC
+    ORDER BY revenueUSD DESC
     LIMIT 30
 ) AS region_data;
+
 `
 
 	var rawJSON []byte

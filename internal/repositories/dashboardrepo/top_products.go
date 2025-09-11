@@ -14,13 +14,13 @@ SELECT jsonb_build_object(
 ) AS result
 FROM (
     SELECT 
-        p.product_name AS productName,
-        SUM(td.quantity) AS itemsSold,
-        p.stock_quantity AS stockQuantity
-    FROM transaction_details td
-    JOIN products p ON td.product_id = p.product_id
+        p.product_name,
+        SUM(t.quantity) AS itemsSold,
+        p.stock_quantity
+    FROM transactions t
+    JOIN products p ON t.product_id = p.product_id
     GROUP BY p.product_id, p.product_name, p.stock_quantity
-    ORDER BY SUM(td.quantity) DESC
+    ORDER BY itemsSold DESC
     LIMIT 20
 ) AS product_data;
 `

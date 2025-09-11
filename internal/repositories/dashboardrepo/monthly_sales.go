@@ -9,17 +9,18 @@ import (
 
 func MonthlySales(ctx context.Context) ([]models.MonthlySale, error) {
 	query := `SELECT jsonb_build_object(
-    'monthlySales', jsonb_agg(month_data)
+    'monthlySales', jsonb_agg(month_data ORDER BY month_num)
 ) AS result
 FROM (
     SELECT 
         TO_CHAR(t.transaction_date, 'Mon') AS month,
-        SUM(td.quantity) AS unitsSold
-    FROM transaction_details td
-    JOIN transactions t ON td.transaction_id = t.transaction_id
-    GROUP BY TO_CHAR(t.transaction_date, 'Mon'), EXTRACT(MONTH FROM t.transaction_date)
-    ORDER BY EXTRACT(MONTH FROM t.transaction_date)
+        DATE_PART('month', t.transaction_date) AS month_num,
+        SUM(t.quantity) AS unitsSold
+    FROM transactions t
+    GROUP BY month, month_num
+    ORDER BY month_num
 ) AS month_data;
+
 `
 
 	var rawJSON []byte
