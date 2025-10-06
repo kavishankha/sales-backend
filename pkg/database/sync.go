@@ -16,7 +16,7 @@ import (
 func LoadCSVAndSync(conn *pgx.Conn, filePath string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open CSV file: %w", err)
 	}
 	defer file.Close()
 
@@ -24,7 +24,7 @@ func LoadCSVAndSync(conn *pgx.Conn, filePath string) error {
 
 	// Skip header
 	if _, err := reader.Read(); err != nil {
-		return err
+		return fmt.Errorf("failed to read CSV header: %w", err)
 	}
 
 	batch := make([][]interface{}, 0, 100_000) // batch size
@@ -34,21 +34,23 @@ func LoadCSVAndSync(conn *pgx.Conn, filePath string) error {
 			if err.Error() == "EOF" {
 				break
 			}
-			return err
+			return fmt.Errorf("error reading CSV: %w", err)
 		}
 
-		transactionDate, err := time.Parse("2006-01-02", record[12])
+		transactionDate, err := parseDate(record[12])
 		if err != nil {
-			return fmt.Errorf("invalid date in CSV: %q, err: %w", record[12], err)
+			return fmt.Errorf("invalid transaction_date in CSV: %q, err: %w", record[12], err)
 		}
-		price, _ := strconv.ParseFloat(record[8], 64)
-		quantity, _ := strconv.Atoi(record[9])
-		totalPrice, _ := strconv.ParseFloat(record[10], 64)
-		stockQuantity, _ := strconv.Atoi(record[11])
-		addedDate, err := time.Parse("2006-01-02", record[12])
+
+		addedDate, err := parseDate(record[12])
 		if err != nil {
-			return fmt.Errorf("invalid date in CSV: %q, err: %w", record[12], err)
+			return fmt.Errorf("invalid added_date in CSV: %q, err: %w", record[12], err)
 		}
+
+		price := parseFloat(record[8])
+		quantity := parseInt(record[9])
+		totalPrice := parseFloat(record[10])
+		stockQuantity := parseInt(record[11])
 
 		row := []interface{}{
 			record[0], transactionDate, record[2], record[3], record[4],
@@ -82,17 +84,41 @@ func LoadCSVAndSync(conn *pgx.Conn, filePath string) error {
 	return nil
 }
 
+// -------------------- Helper Functions --------------------
+
+// parseDate safely parses a date string in "YYYY-MM-DD" format
+func parseDate(s string) (time.Time, error) {
+	return time.Parse("2006-01-02", s)
+}
+
+// parseFloat safely parses a float string, returns 0 on error
+func parseFloat(s string) float64 {
+	v, _ := strconv.ParseFloat(s, 64)
+	return v
+}
+
+// parseInt safely parses an int string, returns 0 on error
+func parseInt(s string) int {
+	v, _ := strconv.Atoi(s)
+	return v
+}
+
 // copyToStaging streams a batch of rows into staging table
 func copyToStaging(conn *pgx.Conn, rows [][]interface{}) error {
 	_, err := conn.CopyFrom(
 		context.Background(),
 		pgx.Identifier{"staging"},
-		[]string{"transaction_id", "transaction_date", "user_id", "country", "region",
+		[]string{
+			"transaction_id", "transaction_date", "user_id", "country", "region",
 			"product_id", "product_name", "category", "price", "quantity", "total_price",
-			"stock_quantity", "added_date"},
+			"stock_quantity", "added_date",
+		},
 		pgx.CopyFromRows(rows),
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to copy batch to staging: %w", err)
+	}
+	return nil
 }
 
 // normalizeData moves data from staging to normalized tables
@@ -101,7 +127,6 @@ func normalizeData(conn *pgx.Conn) error {
 
 	queries := []string{
 		// --- USERS ---
-		// Pick the most recent record per user_id based on transaction_date
 		`INSERT INTO users (user_id, country, region)
 		 SELECT DISTINCT ON (user_id) user_id, country, region
 		 FROM staging
@@ -111,7 +136,6 @@ func normalizeData(conn *pgx.Conn) error {
 		     region = EXCLUDED.region;`,
 
 		// --- PRODUCTS ---
-		// Pick the most recent record per product_id based on added_date
 		`INSERT INTO products (product_id, product_name, category, stock_quantity, added_date)
 		 SELECT DISTINCT ON (product_id) product_id, product_name, category, stock_quantity, added_date
 		 FROM staging
@@ -123,7 +147,6 @@ func normalizeData(conn *pgx.Conn) error {
 		     added_date = EXCLUDED.added_date;`,
 
 		// --- TRANSACTIONS ---
-		// Insert all transactions (no updates, they are unique)
 		`INSERT INTO transactions (transaction_id, transaction_date, user_id, product_id, price, quantity, total_price)
 		 SELECT transaction_id, transaction_date, user_id, product_id, price, quantity, total_price
 		 FROM staging
@@ -132,10 +155,10 @@ func normalizeData(conn *pgx.Conn) error {
 
 	for _, q := range queries {
 		if _, err := conn.Exec(ctx, q); err != nil {
-			return fmt.Errorf("normalization failed: %v", err)
+			return fmt.Errorf("normalization failed: %w", err)
 		}
 	}
 
-	log.Println("Data normalized successfully and correctly.")
+	log.Println("Data normalized successfully.")
 	return nil
 }

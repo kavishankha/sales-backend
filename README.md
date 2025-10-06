@@ -141,7 +141,18 @@ CSV_PATH=<csv_file_path> # Path to any required CSV file
 # Run the application using the included script
 ./run.sh
 ```
+```bash
+# Wait until MIGRATION and ETL RUN
+2025/10/07 01:55:35 Starting pprof on :6060
+2025/10/07 01:55:35 SQL DB connected successfully!
+2025/10/07 01:55:35 Tables migration complete!
+2025/10/07 01:55:35 Materialized views created successfully!
+2025/10/07 01:55:35 PGX connection established for high-performance operations
+2025/10/07 01:56:05 CSV loaded into staging successfully.
+2025/10/07 02:01:36 Data normalized successfully.
+2025/10/07 02:02:18 Materialized views refreshed successfully!
 
+```
 -----
 
 ## 🧪 Testing
